@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 — 2026-11-17
+- Fix: `take` picked the alphabetically last handoff when two were saved in the same minute; now the newest by save time.
+- New `show [file]` (print without taking) and `drop <file>` (delete a test or mistaken handoff); file names can be given by prefix.
+- `save` refuses a body without a `Next step:` line (`--force` overrides). Skill: run `check` first when asked whether it is safe to close. Same inside-a-journal rule as animus-journal.
+
 ## 0.3.1 — 2026-11-17
 - Skill: a taken handoff is no longer waiting; continue it later with `list` + `take <file>` or save a fresh one.
 

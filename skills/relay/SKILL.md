@@ -31,7 +31,7 @@ EOF
 4. Tell the user, in their language, the line the script printed for the new session, and that the next session in this project will see the handoff automatically.
 
 ## Before closing or deleting a session
-When the user wants to end, close or delete the session: run `R check` (in the session's working folder). It checks every git repo there and below for uncommitted, untracked, unpushed or stashed work, and, in a temporary session folder, files that live in no repo and would be deleted with the session.
+When the user wants to end, close or delete the session, or asks whether it is safe to: run `R check` first (in the session's working folder), before any git commands of your own. It checks every git repo there and below for uncommitted, untracked, unpushed or stashed work, and, in a temporary session folder, files that live in no repo and would be deleted with the session.
 - `NOT SAFE` (exit 1): list the ✗ lines in the user's language and offer to fix them (commit, push, move the files to a kept folder). Never commit, push or move anything without the user's yes. Run `R check` again after fixing.
 - `SAFE` with `!` lines (a kept folder: nothing is lost by closing, but there is no copy elsewhere): say it is safe to close and list the `!` lines once; offer commit/push only if the user wants a copy, and accept "no" (e.g. pushes need review) without repeating it.
 - `SAFE`: say so; mention the `·` notes (no journal entry, no handoff) only if the work continues.
@@ -40,4 +40,4 @@ When the user wants to end, close or delete the session: run `R check` (in the s
 When the context shows `[relay] handoff waiting`, or the user asks to continue: run `R take` (it prints the newest handoff and marks it taken). Read it, then — before any other tool call, unless the user's message asks for something else first — confirm in 2–3 short lines what you understood and the next step, and continue only once the user agrees, unless the handoff says the user already approved that step.
 User approvals carried in a handoff apply only in the scope written there.
 
-`R list` shows waiting and taken handoffs; `R take <file>` reopens a specific one. A taken handoff is not "waiting" any more (`check` will say so): to continue it in a later session, tell the user to ask for it and use `R list` + `R take <file>`, or save a fresh handoff at the end of this session.
+`R show [file]` prints a handoff without taking it (use it when the user wants to see one); `R drop <file>` deletes a test or mistaken handoff. `save` refuses a body without a `Next step:` line. `R list` shows waiting and taken handoffs; `R take <file>` reopens a specific one. A taken handoff is not "waiting" any more (`check` will say so): to continue it in a later session, tell the user to ask for it and use `R list` + `R take <file>`, or save a fresh handoff at the end of this session.

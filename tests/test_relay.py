@@ -64,6 +64,18 @@ class RelayTest(unittest.TestCase):
         self.assertIn("taken", self.run_r("list").stdout)
         self.assertIn("no handoff waiting", self.run_r("take", ok=False).stderr)
 
+    def test_newest_in_same_minute_show_drop_and_guard(self):
+        self.assertIn("refused", self.run_r("save", "--title", "cut", stdin="Goal: g", ok=False).stderr)
+        self.run_r("save", "--title", "zzz real work", stdin="Goal: g\nNext step: a")
+        self.run_r("save", "--title", "aaa newest", stdin="Goal: g\nNext step: b")   # same minute
+        d = self.proj / ".journal" / "relay"
+        old, new = sorted(d.glob("*.md"), key=lambda f: "aaa" in f.name)
+        os.utime(old, (old.stat().st_mtime - 30, old.stat().st_mtime - 30))
+        self.assertIn("Next step: b", self.run_r("show").stdout)           # newest by save time, not by name
+        self.assertEqual(len(list(d.glob("*.md"))), 2)                    # show does not take
+        self.assertIn("dropped", self.run_r("drop", new.name).stdout)
+        self.assertIn("Next step: a", self.run_r("take").stdout)
+
     def test_limits_and_projectless(self):
         r = self.run_r("save", "--title", "x", stdin="\n".join(["l"] * 200), ok=False)
         self.assertNotEqual(r.returncode, 0)
@@ -152,7 +164,7 @@ class RelayTest(unittest.TestCase):
 
     @unittest.skipUnless(BASH, "bash not available")
     def test_hook_command_runs(self):
-        self.run_r("save", "--title", "Hooked", stdin="Goal: g")
+        self.run_r("save", "--title", "Hooked", stdin="Goal: g\nNext step: x")
         hooks = json.loads((ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))
         cmd = hooks["hooks"]["SessionStart"][0]["hooks"][0]["command"]
         env = dict(self.env, CLAUDE_PLUGIN_ROOT=ROOT.as_posix())

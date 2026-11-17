@@ -50,8 +50,27 @@ def run(args, cwd):
         return ""
 
 
+def _inside_journal(cwd):
+    """A folder inside a journal (~/journal/... or <project>/.journal/...) belongs to that journal,
+    so running a command from there never creates a nested .journal."""
+    try:
+        p = Path(cwd).resolve()
+        g = JOURNAL_GLOBAL.resolve()
+    except (OSError, RuntimeError):
+        return None
+    if p == g or g in p.parents:
+        return JOURNAL_GLOBAL
+    for q in (p, *p.parents):
+        if q.name == ".journal":
+            return q
+    return None
+
+
 def journal_dir(cwd):
     """Same rule as animus-journal: git root/.journal, or the global dir for projectless sessions."""
+    _j = _inside_journal(cwd)
+    if _j is not None:
+        return _j
     p = Path(cwd)
     s = str(p).replace("\\", "/").lower()
     if "scratch-workspaces" in s or not p.exists():
@@ -81,7 +100,19 @@ def ensure(d):
 
 
 def waiting(d):
-    return sorted(d.glob("*.md")) if d.is_dir() else []
+    """Waiting handoffs, oldest first by save time (two saved in the same minute must not sort by title)."""
+    return sorted(d.glob("*.md"), key=lambda f: (f.stat().st_mtime, f.name)) if d.is_dir() else []
+
+
+def find_handoff(d, name):
+    for f in (Path(name), d / name, d / "taken" / name):
+        if f.is_file():
+            return f
+    hits = [f for f in waiting(d) + sorted((d / "taken").glob("*.md") if (d / "taken").is_dir() else [])
+            if f.name.startswith(name)]
+    if len(hits) == 1:
+        return hits[0]
+    sys.exit(f"[relay] not found: {name}" if not hits else f"[relay] '{name}' matches {len(hits)} handoffs")
 
 
 def title_of(f):
@@ -187,6 +218,9 @@ def cmd_save(a):
         sys.exit("refused: empty handoff")
     if n > MAX_LINES:
         sys.exit(f"refused: {n} lines > {MAX_LINES}. A handoff is a map, not a transcript: compress and retry.")
+    if not a.force and not re.search(r"(?im)^\s*next step\s*:", text):
+        sys.exit("refused: no 'Next step:' line - a handoff must say what to do first (cut-off heredoc?). "
+                 "Write the body to a file and run `save --title T < file`, or pass --force.")
     if not text.startswith("# "):
         text = f"# {a.title}\n\n{text}"
     d = ensure(relay_dir())
@@ -199,9 +233,7 @@ def cmd_save(a):
 def cmd_take(a):
     d = relay_dir()
     if a.file:
-        f = Path(a.file)
-        if not f.is_file():
-            f = d / a.file
+        f = find_handoff(d, a.file)
     else:
         files = waiting(d)
         if not files:
@@ -214,6 +246,26 @@ def cmd_take(a):
         ensure(d)
         f.replace(d / "taken" / f.name)
         print(f"[relay] marked as taken -> {d / 'taken' / f.name}")
+
+
+def cmd_show(a):
+    """Print a handoff without taking it."""
+    d = relay_dir()
+    if a.file:
+        f = find_handoff(d, a.file)
+    else:
+        files = waiting(d)
+        if not files:
+            sys.exit("[relay] no handoff waiting here (`list` shows taken ones; `show <file>`)")
+        f = files[-1]
+    print(f.read_text(encoding="utf-8", errors="replace"))
+
+
+def cmd_drop(a):
+    """Delete a mistaken or test handoff."""
+    f = find_handoff(relay_dir(), a.file)
+    f.unlink()
+    print(f"[relay] dropped {f.name}")
 
 
 def cmd_list(_):
@@ -368,7 +420,14 @@ def main(argv=None):
     sub.add_parser("gather").set_defaults(fn=cmd_gather)
     p = sub.add_parser("save")
     p.add_argument("--title", required=True)
+    p.add_argument("--force", action="store_true", help="save even without a 'Next step:' line")
     p.set_defaults(fn=cmd_save)
+    p = sub.add_parser("show", help="print a handoff without taking it")
+    p.add_argument("file", nargs="?")
+    p.set_defaults(fn=cmd_show)
+    p = sub.add_parser("drop", help="delete a mistaken or test handoff")
+    p.add_argument("file")
+    p.set_defaults(fn=cmd_drop)
     p = sub.add_parser("take")
     p.add_argument("file", nargs="?")
     p.set_defaults(fn=cmd_take)
