@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.1 — 2026-11-17
+- Skill: a taken handoff is no longer waiting; continue it later with `list` + `take <file>` or save a fresh one.
+
 ## 0.3.0 — 2026-11-17
 - `check`: in a kept folder nothing is deleted with the session, so uncommitted/unpushed/stashed work is shown as `!` (not backed up yet) and the verdict is SAFE; ✗ blockers remain for temporary session folders.
 - `gather` shows stash and unpushed commits, and says when the journal has no entries yet.
