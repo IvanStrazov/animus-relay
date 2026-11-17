@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 — 2026-11-17
+- Skill: not even part of a secret (a token prefix) goes into a handoff; guesses are marked as hypotheses; a handoff is corrected by saving a new one, never edited by hand.
+- Skill: on pick-up the user's own request comes before the confirmation.
+- Handoff file names are cut at a word boundary.
+
 ## 0.2.1 — 2026-11-17
 - `check`: a repo with no remote is only a note when the folder is kept (closing a session does not delete it); still a blocker in a temporary session folder.
 - Skill: on pick-up, confirm the handoff in 2–3 short lines before any other tool call.

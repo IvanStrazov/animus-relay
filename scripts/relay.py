@@ -168,7 +168,10 @@ def cmd_gather(_):
 
 def slug(s):
     s = re.sub(r"[^\w\s-]", "", s.lower(), flags=re.U).strip()
-    return re.sub(r"[\s_-]+", "-", s)[:40] or "handoff"
+    s = re.sub(r"[\s_-]+", "-", s)
+    if len(s) > 40:  # cut at a word boundary, not mid-word
+        s = s[:41].rsplit("-", 1)[0] if "-" in s[:41] else s[:40]
+    return s.strip("-") or "handoff"
 
 
 def cmd_save(a):

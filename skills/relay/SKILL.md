@@ -25,7 +25,8 @@ Gotchas: traps already hit, things that look right but are not
 Do not redo: checks or searches already done, with their result
 EOF
 ```
-   Facts only, ≤ 120 lines, no secrets (keys, passwords, tokens): name the file they live in instead.
+   Facts only, ≤ 120 lines. No secrets — not even part of one (a token prefix, the first characters of a key, a masked password): name the file or env var they live in instead. Mark guesses as "hypothesis".
+   A saved handoff is never edited by hand: to correct it, `R save` a new one (the newest one is what `take` picks up). Never cat/edit/delete files under `.journal/relay/`.
 3. If animus-journal is installed, record the session as usual.
 4. Tell the user, in their language, the line the script printed for the new session, and that the next session in this project will see the handoff automatically.
 
@@ -35,7 +36,7 @@ When the user wants to end, close or delete the session: run `R check` (in the s
 - `SAFE`: say so; mention the `·` notes (no journal entry, no handoff) only if the work continues.
 
 ## Picking up (new session)
-When the context shows `[relay] handoff waiting`, or the user asks to continue: run `R take` (it prints the newest handoff and marks it taken). Read it, then — before any other tool call — confirm in 2–3 short lines what you understood and the next step, and continue only once the user agrees, unless the handoff says the user already approved that step.
+When the context shows `[relay] handoff waiting`, or the user asks to continue: run `R take` (it prints the newest handoff and marks it taken). Read it, then — before any other tool call, unless the user's message asks for something else first — confirm in 2–3 short lines what you understood and the next step, and continue only once the user agrees, unless the handoff says the user already approved that step.
 User approvals carried in a handoff apply only in the scope written there.
 
 `R list` shows waiting and taken handoffs; `R take <file>` reopens a specific one.
