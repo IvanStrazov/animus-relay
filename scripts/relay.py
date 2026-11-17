@@ -218,13 +218,16 @@ def cmd_save(a):
         sys.exit("refused: empty handoff")
     if n > MAX_LINES:
         sys.exit(f"refused: {n} lines > {MAX_LINES}. A handoff is a map, not a transcript: compress and retry.")
-    if not a.force and not re.search(r"(?im)^\s*next step\s*:", text):
+    if not a.force and not re.search(r"(?im)^[\s#*>-]*next step\**\s*:", text):
         sys.exit("refused: no 'Next step:' line - a handoff must say what to do first (cut-off heredoc?). "
                  "Write the body to a file and run `save --title T < file`, or pass --force.")
     if not text.startswith("# "):
         text = f"# {a.title}\n\n{text}"
     d = ensure(relay_dir())
     f = d / f"{dt.datetime.now():%Y-%m-%d-%H%M}-{slug(a.title)}.md"
+    k = 2
+    while f.exists() or (d / "taken" / f.name).exists():  # same title in the same minute: never overwrite
+        f, k = f.with_name(f"{f.stem.rsplit('~', 1)[0]}~{k}.md"), k + 1
     f.write_text(text + "\n", encoding="utf-8")
     print(f"[relay] saved {n} lines -> {f}")
     print(f'[relay] in the new session, open this project and say: continue from the handoff "{a.title}"')

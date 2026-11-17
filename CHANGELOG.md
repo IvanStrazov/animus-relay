@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 — 2026-11-17
+- Fix: two `save`s with the same title in the same minute overwrote each other; the second now gets a `~2` suffix.
+- `save` accepts `**Next step:**` / `## Next step:` as the required line.
+
 ## 0.4.0 — 2026-11-17
 - Fix: `take` picked the alphabetically last handoff when two were saved in the same minute; now the newest by save time.
 - New `show [file]` (print without taking) and `drop <file>` (delete a test or mistaken handoff); file names can be given by prefix.
