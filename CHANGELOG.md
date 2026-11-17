@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.2 — 2026-11-17
+- Skill: more Russian trigger phrases.
+
 ## 0.4.1 — 2026-11-17
 - Fix: two `save`s with the same title in the same minute overwrote each other; the second now gets a `~2` suffix.
 - `save` accepts `**Next step:**` / `## Next step:` as the required line.

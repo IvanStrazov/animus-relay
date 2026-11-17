@@ -1,6 +1,6 @@
 ---
 name: relay
-description: Hand the current work over to a fresh Claude Code session without losing the thread — when the context has grown too big, before a restart, or to continue tomorrow; and pick a waiting handoff up in the new session. Use on /relay, "save the context and restart", "hand this over to a new session", "continue from the handoff", when the start-of-session context shows a `[relay] handoff waiting` line, or when the user wants to close, end or delete the session ("we're done", "заканчиваем", "can I delete this session?").
+description: Hand the current work over to a fresh Claude Code session without losing the thread — when the context has grown too big, before a restart, or to continue tomorrow; and pick a waiting handoff up in the new session. Use on /relay, "save the context and restart", "hand this over to a new session", "continue from the handoff", when the start-of-session context shows a `[relay] handoff waiting` line, when the user wants to close, end or delete the session ("we're done", "can I delete this session?"), or in Russian — «передай в новую сессию», «сохрани контекст», «продолжим завтра», «подхвати передачу», «заканчиваем», «можно удалять сессию?».
 ---
 
 # Relay
