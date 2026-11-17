@@ -5,7 +5,7 @@ description: Hand the current work over to a fresh Claude Code session without l
 
 # Relay
 
-`R` = `python3 "<plugin root>/scripts/relay.py"`, where the plugin root is two levels above this skill's base directory (`python` on Windows if `python3` is missing). The start-of-session line, when present, shows the exact command.
+`R` = `python3 "<plugin root>/scripts/relay.py"`, where the plugin root is two levels above this skill's base directory (`python` if `python3` is missing). On Windows, `python3`/`python` may be Microsoft Store stubs: then use the interpreter and script path from this plugin's `cmd` in `~/.claude/ecosystem.json` (or a start-of-session line), and write paths with forward slashes so a trailing `\` does not eat the closing quote. The start-of-session line, when present, shows the exact command.
 
 ## Handing over (old session)
 1. `R gather` — git state, STATE.md, recent journal entries. Do not re-read files you already know.
@@ -27,12 +27,13 @@ EOF
 ```
    Facts only, ≤ 120 lines. No secrets — not even part of one (a token prefix, the first characters of a key, a masked password): name the file or env var they live in instead. Mark guesses as "hypothesis".
    A saved handoff is never edited by hand: to correct it, `R save` a new one (the newest one is what `take` picks up). Never cat/edit/delete files under `.journal/relay/`.
-3. If animus-journal is installed, record the session as usual.
+3. If animus-journal is installed and the session did real work, record it in the same turn without asking (a handoff means the work matters).
 4. Tell the user, in their language, the line the script printed for the new session, and that the next session in this project will see the handoff automatically.
 
 ## Before closing or deleting a session
 When the user wants to end, close or delete the session: run `R check` (in the session's working folder). It checks every git repo there and below for uncommitted, untracked, unpushed or stashed work, and, in a temporary session folder, files that live in no repo and would be deleted with the session.
 - `NOT SAFE` (exit 1): list the ✗ lines in the user's language and offer to fix them (commit, push, move the files to a kept folder). Never commit, push or move anything without the user's yes. Run `R check` again after fixing.
+- `SAFE` with `!` lines (a kept folder: nothing is lost by closing, but there is no copy elsewhere): say it is safe to close and list the `!` lines once; offer commit/push only if the user wants a copy, and accept "no" (e.g. pushes need review) without repeating it.
 - `SAFE`: say so; mention the `·` notes (no journal entry, no handoff) only if the work continues.
 
 ## Picking up (new session)

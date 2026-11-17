@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0 — 2026-11-17
+- `check`: in a kept folder nothing is deleted with the session, so uncommitted/unpushed/stashed work is shown as `!` (not backed up yet) and the verdict is SAFE; ✗ blockers remain for temporary session folders.
+- `gather` shows stash and unpushed commits, and says when the journal has no entries yet.
+- Skill: record the journal entry with a handoff without asking; accept a user's "no push" without repeating it; Windows interpreter from ecosystem.json.
+
 ## 0.2.2 — 2026-11-17
 - Skill: not even part of a secret (a token prefix) goes into a handoff; guesses are marked as hypotheses; a handoff is corrected by saving a new one, never edited by hand.
 - Skill: on pick-up the user's own request comes before the confirmation.

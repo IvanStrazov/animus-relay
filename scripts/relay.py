@@ -136,9 +136,15 @@ def cmd_context(_):
 def cmd_gather(_):
     cwd = Path.cwd()
     j = journal_dir(cwd)
-    out = [f"cwd: {cwd}", f"journal: {j}"]
+    out = [f"cwd: {cwd}", f"journal: {j}" + ("" if (j / "log").is_dir() else " (no entries yet)")]
     if run(["git", "rev-parse", "--is-inside-work-tree"], cwd) == "true":
         out.append(f"git branch: {run(['git', 'branch', '--show-current'], cwd) or '(detached)'}")
+        stash = run(["git", "stash", "list"], cwd).splitlines()
+        ahead = run(["git", "rev-list", "--count", "@{u}..HEAD"], cwd)
+        if stash:
+            out.append(f"stash: {len(stash)} entr{'y' if len(stash) == 1 else 'ies'}")
+        if ahead.isdigit() and int(ahead):
+            out.append(f"unpushed commits: {ahead}")
         status = run(["git", "status", "--short"], cwd).splitlines()
         out.append(f"uncommitted: {len(status)} file(s)")
         out += [f"  {l}" for l in status[:20]]
@@ -313,11 +319,13 @@ def outside_repos(root, repos, limit=10):
 def cmd_check(a):
     root = Path(a.path or os.getcwd()).resolve()
     scratch = "scratch-workspaces" in str(root).replace("\\", "/").lower()
-    blockers, notes = [], []
+    blockers, unsaved, notes = [], [], []
     repos = git_repos(root)
     for r in repos:
         probs, rnotes = repo_problems(r, scratch)
-        blockers += [f"{r.name}: {p}" for p in probs]
+        # a temporary folder is deleted with the session: its problems lose work. A kept folder stays on disk,
+        # so the same problems only mean "no copy elsewhere yet".
+        (blockers if scratch else unsaved).extend(f"{r.name}: {p}" for p in probs)
         notes += [f"{r.name}: {n}" for n in rnotes]
     if scratch:
         loose, n = outside_repos(root, repos)
@@ -338,9 +346,17 @@ def cmd_check(a):
     print(f"[relay] {len(repos)} git repo(s) checked" + (" · temporary session folder" if scratch else ""))
     for b in blockers:
         print(f"  ✗ {b}")
+    for u in unsaved:
+        print(f"  ! {u}")
     for n in notes:
         print(f"  · {n}")
-    print("[relay] NOT SAFE to close: fix the ✗ lines first" if blockers else "[relay] SAFE to close")
+    if blockers:
+        print("[relay] NOT SAFE to close: fix the ✗ lines first")
+    elif unsaved:
+        print("[relay] SAFE to close: this folder stays on disk, nothing is deleted with the session. "
+              "Not backed up yet (! lines): commit/push them only if the user wants a copy elsewhere")
+    else:
+        print("[relay] SAFE to close")
     if blockers:
         sys.exit(1)
 

@@ -144,6 +144,11 @@ class RelayTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn("· hobby: no remote", r.stdout)
         self.assertIn("SAFE to close", r.stdout)
+        (repo / "a.txt").write_text("changed", encoding="utf-8")
+        r = self.run_r("check", str(repo), ok=False)
+        self.assertEqual(r.returncode, 0, r.stdout)        # a kept folder loses nothing when the session goes
+        self.assertIn("! hobby: 1 uncommitted change(s): a.txt", r.stdout)
+        self.assertIn("Not backed up yet", r.stdout)
 
     @unittest.skipUnless(BASH, "bash not available")
     def test_hook_command_runs(self):
