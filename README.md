@@ -1,7 +1,7 @@
 # animus-relay
 
 [![tests](https://github.com/IvanStrazov/animus-relay/actions/workflows/test.yml/badge.svg)](https://github.com/IvanStrazov/animus-relay/actions/workflows/test.yml)
-[![version](https://img.shields.io/badge/version-0.1.0-blue)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.2.0-blue)](CHANGELOG.md)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 ![dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)
@@ -38,6 +38,8 @@ Then say `/relay`. Requires Python 3.9+ on `PATH` (`python3` or `python`); works
 
 Handoffs live in `<project>/.journal/relay/` (or `~/journal/relay/` without a project), next to [animus-journal](https://github.com/IvanStrazov/animus-journal) and git-ignored. Taken ones move to `relay/taken/`.
 
+**Safe to close?** Say "we're done" or "can I delete this session?" and Claude runs `relay.py check`: every git repo in the session folder and below is checked for uncommitted, untracked, unpushed or stashed work, and, in a temporary session folder, files that live in no repo and would vanish with it. You get `SAFE to close` or a list of what to fix first. Nothing is committed or pushed without your yes.
+
 Unlike handoff tools that summarise automatically before compaction, a relay is written on purpose and carries what a summary loses: decisions with reasons, approvals with scope, dead ends.
 
 ## Token budget
@@ -55,6 +57,7 @@ relay.py gather              # facts for writing a handoff
 relay.py save --title T      # stdin -> handoff
 relay.py take [FILE]         # print the newest waiting handoff, mark it taken
 relay.py list
+relay.py check [PATH]       # safe to close/delete? exit 1 if work would be lost
 ```
 
 ## Privacy

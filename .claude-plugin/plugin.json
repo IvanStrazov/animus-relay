@@ -1,7 +1,7 @@
 {
   "name": "animus-relay",
-  "version": "0.1.0",
-  "description": "Hand work over to a fresh Claude Code session without losing the thread: a short handoff file next to the project journal, shown at the next session start until it is picked up.",
+  "version": "0.2.0",
+  "description": "Hand work over to a fresh Claude Code session without losing the thread: a short handoff file next to the project journal, shown at the next session start until it is picked up; plus a check that the session is safe to close or delete.",
   "author": {
     "name": "Ivan Strazov",
     "url": "https://github.com/IvanStrazov"

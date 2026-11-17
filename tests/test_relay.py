@@ -88,6 +88,49 @@ class RelayTest(unittest.TestCase):
         self.assertIn("In progress: thing", out)
         self.assertIn("Did a thing", out)
 
+    def test_check_safe_to_close(self):
+        if not shutil.which("git"):
+            self.skipTest("git not available")
+        g = lambda cwd, *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a],
+                                           cwd=str(cwd), capture_output=True)
+        work = self.tmp / "scratch-workspaces" / "s1"   # looks like a temporary session folder
+        repo = work / "repo"
+        repo.mkdir(parents=True)
+        bare = self.tmp / "remote.git"
+        g(self.tmp, "init", "-q", "--bare", str(bare))
+        g(repo, "init", "-q", "-b", "main")
+        (repo / "a.txt").write_text("x", encoding="utf-8")
+        g(repo, "add", "-A")
+        g(repo, "commit", "-q", "-m", "c1")
+        check = lambda: self.run_r("check", str(work), ok=False)
+
+        r = check()                                      # committed, but there is no remote
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("no remote", r.stdout)
+        g(repo, "remote", "add", "origin", str(bare))
+        g(repo, "push", "-q", "-u", "origin", "main")
+        r = check()
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("SAFE to close", r.stdout)
+        self.assertIn("no handoff waiting", r.stdout)    # a note, not a blocker
+
+        (repo / "a.txt").write_text("changed", encoding="utf-8")
+        (repo / "new.txt").write_text("n", encoding="utf-8")
+        r = check()
+        self.assertIn("1 uncommitted change(s): a.txt", r.stdout)
+        self.assertIn("1 untracked file(s): new.txt", r.stdout)
+        g(repo, "add", "-A")
+        g(repo, "commit", "-q", "-m", "c2")
+        r = check()
+        self.assertIn("ahead 1", r.stdout)               # committed but not pushed
+        g(repo, "push", "-q")
+        (work / "notes.md").write_text("only here", encoding="utf-8")
+        r = check()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("will be deleted with the session: notes.md", r.stdout)
+        (work / "notes.md").unlink()
+        self.assertEqual(check().returncode, 0)
+
     @unittest.skipUnless(BASH, "bash not available")
     def test_hook_command_runs(self):
         self.run_r("save", "--title", "Hooked", stdin="Goal: g")

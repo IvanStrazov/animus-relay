@@ -13,6 +13,7 @@ Commands:
   take [FILE]              print the newest waiting handoff (or FILE) and mark it taken
   list                     waiting and taken handoffs
   where                    print the relay dir
+  check [PATH]             is it safe to close/delete this session? exit 1 if work would be lost
 
 Standard library only, Python 3.9+. No network.
 """
@@ -222,6 +223,121 @@ def cmd_where(_):
     print(relay_dir())
 
 
+# ---------- safe to close? ----------
+
+SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".journal"}
+
+
+def git_repos(root, depth=2):
+    """The repo containing root (if any) plus repos nested up to `depth` levels below it."""
+    out = []
+    top = run(["git", "rev-parse", "--show-toplevel"], root)
+    if top:
+        out.append(Path(top))
+
+    def walk(d, level):
+        if level > depth:
+            return
+        try:
+            kids = [k for k in d.iterdir() if k.is_dir() and k.name not in SKIP_DIRS]
+        except OSError:
+            return
+        for k in kids:
+            if (k / ".git").exists():
+                out.append(k)
+            else:
+                walk(k, level + 1)
+    walk(root, 1)
+    seen, uniq = set(), []
+    for r in out:
+        key = str(r.resolve()).lower()
+        if key not in seen:
+            seen.add(key)
+            uniq.append(r)
+    return uniq
+
+
+def repo_problems(repo):
+    probs = []
+    status = run(["git", "status", "--porcelain"], repo).splitlines()
+    # `run` strips the output, so the first line may have lost its leading space: path = l[2:].lstrip()
+    changed = [l[2:].lstrip() for l in status if not l.startswith("??")]
+    untracked = [l[2:].lstrip() for l in status if l.startswith("??")]
+    if changed:
+        probs.append(f"{len(changed)} uncommitted change(s): " + ", ".join(changed[:5]))
+    if untracked:
+        probs.append(f"{len(untracked)} untracked file(s): " + ", ".join(untracked[:5]))
+    if not run(["git", "remote"], repo):
+        if run(["git", "rev-parse", "--verify", "HEAD"], repo):
+            probs.append("no remote: commits exist only here")
+    else:
+        branches = run(["git", "for-each-ref", "--format=%(refname:short)|%(upstream:short)|%(upstream:track)",
+                        "refs/heads"], repo).splitlines()
+        for b in branches:
+            name, up, track = (b.split("|") + ["", ""])[:3]
+            if not up:
+                probs.append(f"branch {name} has no upstream (never pushed?)")
+            elif "ahead" in track:
+                probs.append(f"branch {name} is {track.strip('[]')} of {up}: not pushed")
+    stash = run(["git", "stash", "list"], repo).splitlines()
+    if stash:
+        probs.append(f"{len(stash)} stash entr{'y' if len(stash) == 1 else 'ies'}")
+    return probs
+
+
+def outside_repos(root, repos, limit=10):
+    """Top-level items in root that are not inside any git repo."""
+    inside = [str(r.resolve()).lower() for r in repos]
+    items = []
+    try:
+        for k in sorted(root.iterdir()):
+            if k.name in SKIP_DIRS:
+                continue
+            path = str(k.resolve()).lower()
+            if any(path == r or path.startswith(r + os.sep) for r in inside):
+                continue
+            if k.is_dir() and any(r.startswith(path + os.sep) for r in inside):
+                continue  # a folder that only holds repos
+            items.append(k.name + ("/" if k.is_dir() else ""))
+    except OSError:
+        pass
+    return items[:limit], len(items)
+
+
+def cmd_check(a):
+    root = Path(a.path or os.getcwd()).resolve()
+    scratch = "scratch-workspaces" in str(root).replace("\\", "/").lower()
+    blockers, notes = [], []
+    repos = git_repos(root)
+    for r in repos:
+        for p in repo_problems(r):
+            blockers.append(f"{r.name}: {p}")
+    if scratch:
+        loose, n = outside_repos(root, repos)
+        if n:
+            blockers.append(f"{n} item(s) in this session's temporary folder are in no git repo and will be "
+                            f"deleted with the session: " + ", ".join(loose) + (" …" if n > len(loose) else ""))
+    j = journal_dir(root)
+    logs = sorted((j / "log").glob("*.md")) if (j / "log").is_dir() else []
+    last = max((f.stat().st_mtime for f in logs), default=0)
+    hours = (dt.datetime.now().timestamp() - last) / 3600
+    if not logs:
+        notes.append("no journal here: if the work matters, record it (animus-journal) before closing")
+    elif hours > a.fresh:
+        notes.append(f"last journal entry is {hours:.0f} h old: record this session if it did real work")
+    if not waiting(relay_dir(root)):
+        notes.append("no handoff waiting: save one (`save`) if the work continues in another session")
+    print(f"[relay] check {root}")
+    print(f"[relay] {len(repos)} git repo(s) checked" + (" · temporary session folder" if scratch else ""))
+    for b in blockers:
+        print(f"  ✗ {b}")
+    for n in notes:
+        print(f"  · {n}")
+    print("[relay] NOT SAFE to close: fix the ✗ lines first" if blockers else "[relay] SAFE to close")
+    if blockers:
+        sys.exit(1)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="relay.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -235,6 +351,10 @@ def main(argv=None):
     p.set_defaults(fn=cmd_take)
     sub.add_parser("list").set_defaults(fn=cmd_list)
     sub.add_parser("where").set_defaults(fn=cmd_where)
+    p = sub.add_parser("check", help="is it safe to close or delete this session?")
+    p.add_argument("path", nargs="?")
+    p.add_argument("--fresh", type=float, default=6, help="hours after which the journal counts as stale")
+    p.set_defaults(fn=cmd_check)
     a = ap.parse_args(argv)
     a.fn(a)
 

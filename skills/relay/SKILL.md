@@ -1,6 +1,6 @@
 ---
 name: relay
-description: Hand the current work over to a fresh Claude Code session without losing the thread — when the context has grown too big, before a restart, or to continue tomorrow; and pick a waiting handoff up in the new session. Use on /relay, "save the context and restart", "hand this over to a new session", "continue from the handoff", or when the start-of-session context shows a `[relay] handoff waiting` line.
+description: Hand the current work over to a fresh Claude Code session without losing the thread — when the context has grown too big, before a restart, or to continue tomorrow; and pick a waiting handoff up in the new session. Use on /relay, "save the context and restart", "hand this over to a new session", "continue from the handoff", when the start-of-session context shows a `[relay] handoff waiting` line, or when the user wants to close, end or delete the session ("we're done", "заканчиваем", "can I delete this session?").
 ---
 
 # Relay
@@ -28,6 +28,11 @@ EOF
    Facts only, ≤ 120 lines, no secrets (keys, passwords, tokens): name the file they live in instead.
 3. If animus-journal is installed, record the session as usual.
 4. Tell the user, in their language, the line the script printed for the new session, and that the next session in this project will see the handoff automatically.
+
+## Before closing or deleting a session
+When the user wants to end, close or delete the session: run `R check` (in the session's working folder). It checks every git repo there and below for uncommitted, untracked, unpushed or stashed work, and, in a temporary session folder, files that live in no repo and would be deleted with the session.
+- `NOT SAFE` (exit 1): list the ✗ lines in the user's language and offer to fix them (commit, push, move the files to a kept folder). Never commit, push or move anything without the user's yes. Run `R check` again after fixing.
+- `SAFE`: say so; mention the `·` notes (no journal entry, no handoff) only if the work continues.
 
 ## Picking up (new session)
 When the context shows `[relay] handoff waiting`, or the user asks to continue: run `R take` (it prints the newest handoff and marks it taken). Read it, then confirm in 2–3 lines what you understood and the next step, and continue only once the user agrees, unless the handoff says the user already approved that step.
