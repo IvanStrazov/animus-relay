@@ -1,0 +1,15 @@
+{
+  "name": "animus-relay",
+  "owner": {
+    "name": "Ivan Strazov",
+    "url": "https://github.com/IvanStrazov"
+  },
+  "plugins": [
+    {
+      "name": "animus-relay",
+      "source": "./",
+      "description": "Hand work over to a fresh session without losing the thread.",
+      "version": "0.1.0"
+    }
+  ]
+}

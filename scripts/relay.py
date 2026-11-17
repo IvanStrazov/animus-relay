@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+"""animus-relay: hand work over to a fresh Claude Code session without losing the thread.
+
+A handoff is a short Markdown file kept next to the project's journal
+(<project>/.journal/relay/, or ~/journal/relay/ for sessions with no project), so it
+is never committed. The next session in that project sees one line at start-up
+while a handoff is waiting, and takes it with `take`.
+
+Commands:
+  context                  SessionStart hook: one line per waiting handoff, nothing otherwise
+  gather                   facts for writing a handoff: git state, STATE.md, recent journal entries
+  save --title T           stdin -> a new handoff file (<= RELAY_MAX_LINES lines)
+  take [FILE]              print the newest waiting handoff (or FILE) and mark it taken
+  list                     waiting and taken handoffs
+  where                    print the relay dir
+
+Standard library only, Python 3.9+. No network.
+"""
+import argparse
+import datetime as dt
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+JOURNAL_GLOBAL = Path(os.environ.get("JOURNAL_GLOBAL_DIR") or Path.home() / "journal").expanduser()
+CLAUDE_DIR = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude").expanduser()
+ECO_FILE = Path(os.environ.get("CLAUDE_ECOSYSTEM_FILE") or CLAUDE_DIR / "ecosystem.json").expanduser()
+MAX_LINES = int(os.environ.get("RELAY_MAX_LINES") or 120)
+SCRIPT = Path(__file__).resolve()
+SELF = "animus-relay"
+ENTRY_RE = re.compile(r"^## (\d{4}-\d{2}-\d{2} \d{2}:\d{2})\s")
+
+for _s in (sys.stdin, sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+
+def run(args, cwd):
+    try:
+        return subprocess.run(args, cwd=str(cwd), capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=10).stdout.strip()
+    except Exception:
+        return ""
+
+
+def journal_dir(cwd):
+    """Same rule as animus-journal: git root/.journal, or the global dir for projectless sessions."""
+    p = Path(cwd)
+    s = str(p).replace("\\", "/").lower()
+    if "scratch-workspaces" in s or not p.exists():
+        return JOURNAL_GLOBAL
+    for base in (Path.home(), Path(tempfile.gettempdir())):
+        try:
+            if p.resolve() == base.resolve():
+                return JOURNAL_GLOBAL
+        except OSError:
+            pass
+    top = run(["git", "rev-parse", "--show-toplevel"], p)
+    return Path(top or p) / ".journal"
+
+
+def relay_dir(cwd=None):
+    j = journal_dir(cwd or os.getcwd())
+    d = j / "relay"
+    return d
+
+
+def ensure(d):
+    (d / "taken").mkdir(parents=True, exist_ok=True)
+    gi = d.parent / ".gitignore"
+    if d.parent != JOURNAL_GLOBAL and not gi.exists():
+        gi.write_text("*\n", encoding="utf-8")  # same convention as animus-journal
+    return d
+
+
+def waiting(d):
+    return sorted(d.glob("*.md")) if d.is_dir() else []
+
+
+def title_of(f):
+    for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("# "):
+            return line[2:].strip()
+    return f.stem
+
+
+def age(f):
+    mins = int((dt.datetime.now().timestamp() - f.stat().st_mtime) // 60)
+    return f"{mins} min ago" if mins < 90 else (f"{mins // 60} h ago" if mins < 48 * 60 else f"{mins // 1440} d ago")
+
+
+def register():
+    try:
+        e = json.loads(ECO_FILE.read_text(encoding="utf-8"))
+        if not isinstance(e, dict):
+            e = {}
+    except (OSError, ValueError):
+        e = {}
+    e.setdefault("plugins", {})
+    me = {"cmd": f'"{sys.executable}" "{SCRIPT}"'}
+    if e["plugins"].get(SELF) != me:
+        e["plugins"][SELF] = me
+        try:
+            ECO_FILE.parent.mkdir(parents=True, exist_ok=True)
+            ECO_FILE.write_text(json.dumps(e, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        except OSError:
+            pass
+
+
+# ---------- commands ----------
+
+def cmd_context(_):
+    cwd = os.getcwd()
+    try:
+        cwd = json.loads(sys.stdin.read() or "{}").get("cwd") or cwd
+    except Exception:
+        pass
+    try:
+        register()
+        d = relay_dir(cwd)
+        files = waiting(d)
+    except Exception:
+        return  # never break session start
+    cmd = f'"{sys.executable}" "{SCRIPT}"'
+    for f in files[-3:]:
+        print(f"[relay] handoff waiting: \"{title_of(f)}\" ({age(f)}). To continue it: {cmd} take")
+
+
+def cmd_gather(_):
+    cwd = Path.cwd()
+    j = journal_dir(cwd)
+    out = [f"cwd: {cwd}", f"journal: {j}"]
+    if run(["git", "rev-parse", "--is-inside-work-tree"], cwd) == "true":
+        out.append(f"git branch: {run(['git', 'branch', '--show-current'], cwd) or '(detached)'}")
+        status = run(["git", "status", "--short"], cwd).splitlines()
+        out.append(f"uncommitted: {len(status)} file(s)")
+        out += [f"  {l}" for l in status[:20]]
+        if len(status) > 20:
+            out.append(f"  (+{len(status) - 20} more)")
+        log = run(["git", "log", "--oneline", "-5"], cwd)
+        if log:
+            out.append("recent commits:")
+            out += [f"  {l}" for l in log.splitlines()]
+    state = j / "STATE.md"
+    if state.is_file() and j != JOURNAL_GLOBAL:
+        out.append("STATE.md:")
+        out += [f"  {l}" for l in state.read_text(encoding="utf-8", errors="replace").splitlines()[:40]]
+    logs = sorted((j / "log").glob("*.md")) if (j / "log").is_dir() else []
+    if logs:
+        secs = re.split(r"(?m)^(?=## \d{4})", logs[-1].read_text(encoding="utf-8", errors="replace"))
+        secs = [s.strip() for s in secs if ENTRY_RE.match(s)]
+        if secs:
+            out.append("recent journal entries:")
+            for s in secs[-3:]:
+                out += [f"  {l}" for l in s.splitlines()[:8]]
+    files = waiting(relay_dir(cwd))
+    if files:
+        out.append("handoffs already waiting: " + ", ".join(f.name for f in files))
+    print("\n".join(out))
+
+
+def slug(s):
+    s = re.sub(r"[^\w\s-]", "", s.lower(), flags=re.U).strip()
+    return re.sub(r"[\s_-]+", "-", s)[:40] or "handoff"
+
+
+def cmd_save(a):
+    text = sys.stdin.read().strip()
+    n = len(text.splitlines())
+    if not text:
+        sys.exit("refused: empty handoff")
+    if n > MAX_LINES:
+        sys.exit(f"refused: {n} lines > {MAX_LINES}. A handoff is a map, not a transcript: compress and retry.")
+    if not text.startswith("# "):
+        text = f"# {a.title}\n\n{text}"
+    d = ensure(relay_dir())
+    f = d / f"{dt.datetime.now():%Y-%m-%d-%H%M}-{slug(a.title)}.md"
+    f.write_text(text + "\n", encoding="utf-8")
+    print(f"[relay] saved {n} lines -> {f}")
+    print(f'[relay] in the new session, open this project and say: continue from the handoff "{a.title}"')
+
+
+def cmd_take(a):
+    d = relay_dir()
+    if a.file:
+        f = Path(a.file)
+        if not f.is_file():
+            f = d / a.file
+    else:
+        files = waiting(d)
+        if not files:
+            sys.exit("[relay] no handoff waiting here")
+        f = files[-1]
+    if not f.is_file():
+        sys.exit(f"[relay] not found: {a.file}")
+    print(f.read_text(encoding="utf-8", errors="replace"))
+    if f.parent == d:
+        ensure(d)
+        f.replace(d / "taken" / f.name)
+        print(f"[relay] marked as taken -> {d / 'taken' / f.name}")
+
+
+def cmd_list(_):
+    d = relay_dir()
+    w = waiting(d)
+    t = sorted((d / "taken").glob("*.md")) if (d / "taken").is_dir() else []
+    for f in w:
+        print(f"waiting  {f.name}  — {title_of(f)} ({age(f)})")
+    for f in t[-10:]:
+        print(f"taken    {f.name}  — {title_of(f)}")
+    if not w and not t:
+        print("[relay] no handoffs here")
+
+
+def cmd_where(_):
+    print(relay_dir())
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="relay.py", description=__doc__.splitlines()[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("context").set_defaults(fn=cmd_context)
+    sub.add_parser("gather").set_defaults(fn=cmd_gather)
+    p = sub.add_parser("save")
+    p.add_argument("--title", required=True)
+    p.set_defaults(fn=cmd_save)
+    p = sub.add_parser("take")
+    p.add_argument("file", nargs="?")
+    p.set_defaults(fn=cmd_take)
+    sub.add_parser("list").set_defaults(fn=cmd_list)
+    sub.add_parser("where").set_defaults(fn=cmd_where)
+    a = ap.parse_args(argv)
+    a.fn(a)
+
+
+if __name__ == "__main__":
+    main()
