@@ -257,8 +257,10 @@ def git_repos(root, depth=2):
     return uniq
 
 
-def repo_problems(repo):
-    probs = []
+def repo_problems(repo, scratch=False):
+    """(blockers, notes). A repo with no remote is only a note outside a temporary folder:
+    closing or deleting the session does not delete the folder, so local commits survive."""
+    probs, notes = [], []
     status = run(["git", "status", "--porcelain"], repo).splitlines()
     # `run` strips the output, so the first line may have lost its leading space: path = l[2:].lstrip()
     changed = [l[2:].lstrip() for l in status if not l.startswith("??")]
@@ -269,7 +271,8 @@ def repo_problems(repo):
         probs.append(f"{len(untracked)} untracked file(s): " + ", ".join(untracked[:5]))
     if not run(["git", "remote"], repo):
         if run(["git", "rev-parse", "--verify", "HEAD"], repo):
-            probs.append("no remote: commits exist only here")
+            (probs if scratch else notes).append("no remote: commits exist only on this machine"
+                                                 + (" and this folder is deleted with the session" if scratch else ""))
     else:
         branches = run(["git", "for-each-ref", "--format=%(refname:short)|%(upstream:short)|%(upstream:track)",
                         "refs/heads"], repo).splitlines()
@@ -282,7 +285,7 @@ def repo_problems(repo):
     stash = run(["git", "stash", "list"], repo).splitlines()
     if stash:
         probs.append(f"{len(stash)} stash entr{'y' if len(stash) == 1 else 'ies'}")
-    return probs
+    return probs, notes
 
 
 def outside_repos(root, repos, limit=10):
@@ -310,8 +313,9 @@ def cmd_check(a):
     blockers, notes = [], []
     repos = git_repos(root)
     for r in repos:
-        for p in repo_problems(r):
-            blockers.append(f"{r.name}: {p}")
+        probs, rnotes = repo_problems(r, scratch)
+        blockers += [f"{r.name}: {p}" for p in probs]
+        notes += [f"{r.name}: {n}" for n in rnotes]
     if scratch:
         loose, n = outside_repos(root, repos)
         if n:

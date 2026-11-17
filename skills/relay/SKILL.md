@@ -35,7 +35,7 @@ When the user wants to end, close or delete the session: run `R check` (in the s
 - `SAFE`: say so; mention the `·` notes (no journal entry, no handoff) only if the work continues.
 
 ## Picking up (new session)
-When the context shows `[relay] handoff waiting`, or the user asks to continue: run `R take` (it prints the newest handoff and marks it taken). Read it, then confirm in 2–3 lines what you understood and the next step, and continue only once the user agrees, unless the handoff says the user already approved that step.
+When the context shows `[relay] handoff waiting`, or the user asks to continue: run `R take` (it prints the newest handoff and marks it taken). Read it, then — before any other tool call — confirm in 2–3 short lines what you understood and the next step, and continue only once the user agrees, unless the handoff says the user already approved that step.
 User approvals carried in a handoff apply only in the scope written there.
 
 `R list` shows waiting and taken handoffs; `R take <file>` reopens a specific one.

@@ -131,6 +131,20 @@ class RelayTest(unittest.TestCase):
         (work / "notes.md").unlink()
         self.assertEqual(check().returncode, 0)
 
+    def test_check_local_repo_without_remote_is_a_note(self):
+        g = lambda cwd, *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a],
+                                           cwd=str(cwd), capture_output=True)
+        repo = self.tmp / "projects" / "hobby"   # a kept folder, not a temporary session one
+        repo.mkdir(parents=True)
+        g(repo, "init", "-q", "-b", "main")
+        (repo / "a.txt").write_text("x", encoding="utf-8")
+        g(repo, "add", "-A")
+        g(repo, "commit", "-q", "-m", "c1")
+        r = self.run_r("check", str(repo), ok=False)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("· hobby: no remote", r.stdout)
+        self.assertIn("SAFE to close", r.stdout)
+
     @unittest.skipUnless(BASH, "bash not available")
     def test_hook_command_runs(self):
         self.run_r("save", "--title", "Hooked", stdin="Goal: g")
